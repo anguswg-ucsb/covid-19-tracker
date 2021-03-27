@@ -1,14 +1,15 @@
 ---
-title: "ggplot2 Brushing"
+title: "COVID Tracker"
+runtime: shiny
 output: 
   flexdashboard::flex_dashboard:
-    orientation: rows
+    orientation: columns
+    theme: flatly
     vertical_layout: fill
     source_code: embed
-runtime: shiny
 ---
 
-```{r setup, include = FALSE}
+```{r global, include = FALSE}
 
 library(tidyverse)
 library(sf)
@@ -27,7 +28,7 @@ library(formattable)
 library(dqshiny)    # auto complete
 library(shiny)       # Starting Reactivity
 library(dashboardthemes) # themes
-library(shinydashboard)
+library(flexdashboard)
 
 # Fonts and label for plotly
 font = list(
@@ -443,6 +444,8 @@ death_info = function(covid19){
 covid19  <-  read_covid19()
 today    <-  today_centroids(counties, covid19)
 basemap  <-  basemap(today)
+today_2 <- today_centroids_2(counties, pop, covid19)
+basemap_2 <- roll_mean_map(today_2)
 ```
 
 
@@ -463,7 +466,7 @@ output$covidTotalDeaths = renderPlotly({ usa_total_deaths(covid19) })
 COVID-19 Tracker {data-icon="fa-briefcase-medical"}
 ====================================
 
-Row
+Column
 -------------------------------------
 ### CASES
 ```{r}
@@ -485,7 +488,6 @@ valueBoxOutput("deathRate")
 output$totalCases <- renderValueBox({
     valueBox(
       paste0((cases_info(covid19)[2])),
-      subtitle = "CASES",
       icon = icon("user"),
       color = "yellow") })
 
@@ -493,7 +495,6 @@ output$totalCases <- renderValueBox({
 output$totalDeaths <- renderValueBox({
     valueBox(
       paste0((cases_info(covid19)[1])),
-      subtitle = "DEATHS",
       icon = icon("skull"),
       color = "red") })
 
@@ -501,7 +502,6 @@ output$totalDeaths <- renderValueBox({
 output$deathRate <- renderValueBox({
     valueBox(
       paste0((death_info(covid19)[5]), "%"),
-      subtitle = "DEATH RATE",
       icon = icon("heart"),
       color = "black") })
 
@@ -553,18 +553,65 @@ observeEvent(input$covidMap2_marker_click, {
   })
 
 # Observes search box, when county is searched, counties FIP code used to render graphs, tables, values boxes
-observe(
-    if(input$auto == ""){
-      NULL
-    } else {
-      FIP <<- input$auto
-      leafletProxy("covidMap") %>%
-        zoom_to_county(counties, FIP)
-      output$covidChart <- renderDygraph({ make_graph(covid19, FIP) })
-      output$covidTable <- renderFormattable({ make_table2(today, FIP) })
-      output$covidNewCases = renderPlotly({ daily_cases_graph(covid19, FIP) })
-      output$covidNewDeaths <- renderPlotly({ daily_deaths_graph(covid19, FIP) })
-      leafletProxy("covidMap2") %>%
-          zoom_to_county(counties, FIP)
-    })
+# observe(
+#     if(input$auto == ""){
+#       NULL
+#     } else {
+#       FIP <<- input$auto
+#       leafletProxy("covidMap") %>%
+#         zoom_to_county(counties, FIP)
+#       output$covidChart <- renderDygraph({ make_graph(covid19, FIP) })
+#       output$covidTable <- renderFormattable({ make_table2(today, FIP) })
+#       output$covidNewCases = renderPlotly({ daily_cases_graph(covid19, FIP) })
+#       output$covidNewDeaths <- renderPlotly({ daily_deaths_graph(covid19, FIP) })
+#       leafletProxy("covidMap2") %>%
+#           zoom_to_county(counties, FIP)
+#     })
 ```
+
+Column {.tabset}
+-------------------------------------
+
+### County statistics
+```{r}
+dygraphOutput('covidGraph')
+```
+
+### Daily New cases
+```{r}
+plotlyOutput("covidNewCases")
+```
+
+### Daily deaths
+```{r}
+plotlyOutput("covidNewDeaths")
+```
+
+### Data table
+```{r}
+formattableOutput('covidTable')
+```
+
+### Cumulative cases
+```{r}
+plotlyOutput("covidTotalCases")
+```
+
+### Cumulative deaths
+```{r}
+plotlyOutput("covidTotalDeaths")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
