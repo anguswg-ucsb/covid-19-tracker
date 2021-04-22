@@ -11,10 +11,10 @@ label = list(
 ### ------------- FUNCTIONS ------------- ###
 
 ### ------------- LOAD COUNTY & POP DATA  ------------- ###
-counties = readRDS("counties.rds")
-pop = readxl::read_excel('PopulationEstimates.xls', skip = 2) %>%
-  select(state = State, pop_19 = POP_ESTIMATE_2019, fips = FIPStxt)
-pop$fips <- as.numeric(pop$fips)
+# counties = readRDS("counties.rds")
+# pop = readxl::read_excel('app/PopulationEstimates.xls', skip = 2) %>%
+#   select(state = State, pop_19 = POP_ESTIMATE_2019, fips = FIPStxt)
+# pop$fips <- as.numeric(pop$fips)
 
 ### ------------ READ IN COVID 19 TIMESERIES URL ------------ ###
 read_covid19 = function(){
@@ -157,8 +157,8 @@ make_table2 = function(today, FIP){
     arrange(desc(cases)) %>%
     st_drop_geometry() %>%
     select(County = county, Cases = cases, Deaths = deaths) %>%
-    mutate(DeathRate = paste0(100* round(Deaths/Cases,2), "%")) %>%
-    head(10)
+    mutate(DeathRate = paste0(100* round(Deaths/Cases,2), "%"))
+    # head(50)
 
   formattable(mydata, align = c("l", rep("r", NCOL(mydata) - 1)),  list(`County` = formatter("span", style = ~ style(color = "azure1",font.weight = "bold")), `Cases` = color_tile("cornsilk", "darkgoldenrod1"), `Deaths` = color_tile("lightpink", "tomato"), `DeathRate` = formatter("span", style = ~ style(color = "azure1",font.weight = "bold"))))
 
@@ -209,6 +209,83 @@ make_graph = function(covid19, FIP){
 }
 
 ### ------------ COUNTRY DAILY GRAPHS ------------ ###
+
+daily_county_cases = function(covid19, FIP){
+  subset <- covid19 %>%
+    filter(fips == FIP)
+  subset <- subset %>%
+    group_by(state, date) %>%
+    summarise(county = county, fips = fips, cases = sum(cases, na.rm = TRUE)) %>%
+    mutate(new_cases = cases - lag(cases)) %>%
+    mutate(rolling_mean = rollmean(new_cases, 7, fill = NA, align = 'right')) %>%
+    arrange(desc(date)) %>%
+    filter(new_cases >= 0) %>%
+    slice(n = 1:240)
+  subset <- rename(subset, Date = date)
+  subset$rolling_mean <- round(subset$rolling_mean, 1)
+  subset
+}
+#
+# # daily county cases graph
+# highchart() %>%
+#   hc_xAxis(type = "datetime", dateTimeLabelFormats = list(month = "%b", year = "%y")) %>%
+#   hc_add_series(subset2, type = "column", hcaes(Date, new_cases)) %>%
+#   hc_add_series(subset2, type = "line", hcaes(Date, rolling_mean)) %>%
+#   hc_plotOptions(column = list(pointWidth = 6,
+#                                dataLabels = list(enabled = FALSE),
+#                                enableMouseTracking = TRUE)) %>%
+#   hc_colors(c("darkcyan", "darkred"))
+daily_county_deaths = function(covid19, FIP){
+  subset <- covid19 %>%
+    filter(fips == FIP)
+  subset <- subset %>%
+    group_by(state, date) %>%
+    summarise(county = county, fips = fips, deaths = sum(deaths, na.rm = TRUE)) %>%
+    mutate(new_deaths = deaths - lag(deaths)) %>%
+    mutate(rolling_mean = rollmean(new_deaths, 7, fill = NA, align = 'right')) %>%
+    filter(new_deaths >= 0, rolling_mean >= 0) %>%
+    arrange(desc(date)) %>%
+    slice(n = 1:240)
+  subset <- rename(subset, Date = date)
+  subset$rolling_mean <- round(subset$rolling_mean, 1)
+  subset
+}
+
+# daily death graph
+# highchart() %>%
+#   hc_xAxis(type = "datetime", dateTimeLabelFormats = list(month = "%b", year = "%y")) %>%
+#   hc_add_series(dd, name = "Daily deaths", type = "column", hcaes(Date, new_deaths)) %>%
+#   hc_add_series(dd, name = "Rolling mean", type = "line", hcaes(Date, rolling_mean)) %>%
+#   hc_plotOptions(column = list(pointWidth = 6,
+#                                dataLabels = list(enabled = FALSE),
+#                                enableMouseTracking = TRUE)) %>%
+#   hc_colors(c("grey", "black"))
+
+total_county_cases <- function(covid19, FIP) {
+  covid19 %>%
+    filter(fips == FIP) %>%
+    rename(Date = date)
+
+}
+
+# total county cases
+# highchart() %>%
+#   hc_xAxis(type = "datetime", dateTimeLabelFormats = list(month = "%b", year = "%y")) %>%
+#   hc_add_series(t, name = "Total cases", type = "column", hcaes(Date, cases)) %>%
+#   hc_plotOptions(column = list(pointWidth = 6,
+#                                dataLabels = list(enabled = FALSE),
+#                                enableMouseTracking = TRUE)) %>%
+#   hc_colors(c("lightblue"))
+
+# total county deaths
+# highchart() %>%
+#   hc_xAxis(type = "datetime", dateTimeLabelFormats = list(month = "%b", year = "%y")) %>%
+#   hc_add_series(t, name = "Total deaths", type = "column", hcaes(Date, deaths)) %>%
+#   hc_plotOptions(column = list(pointWidth = 6,
+#                                dataLabels = list(enabled = FALSE),
+#                                enableMouseTracking = TRUE)) %>%
+#   hc_colors(c("pink"))
+
 daily_cases_graph = function(covid19, FIP){
   subset2 <- covid19 %>%
     filter(fips == FIP)
@@ -320,6 +397,24 @@ total_deaths_graph = function(covid19, FIP){
 
 
 ### ------------ COUNTRY LEVEL GRAPHS ------------ ###
+total_us_cases <- function(covid19){
+  covid19 %>%
+    group_by(date) %>%
+    summarize(cases = sum(cases, na.rm = TRUE)) %>%
+    arrange(desc(date)) %>%
+    slice(n = 1:320) %>%
+    rename(Date = date)
+}
+total_us_deaths <- function(covid19){
+  covid19 %>%
+    group_by(date) %>%
+    summarize(deaths = sum(deaths, na.rm = TRUE)) %>%
+    arrange(desc(date)) %>%
+    slice(n = 1:320) %>%
+    rename(Date = date)
+}
+
+
 usa_total_cases = function(covid19){
   total_cases <- covid19 %>%
     group_by(date) %>%
@@ -387,7 +482,7 @@ usa_total_deaths = function(covid19){
 
 ### ------------ VALUE BOXES ------------ ###
 cases_info = function(covid19){
-  subset3 <- covid19 %>%
+  covid19 %>%
     group_by(date) %>%
     summarise(deaths = sum(deaths, na.rm = TRUE), cases = sum(cases, na.rm = TRUE)) %>%
     mutate(new_cases = cases - lag(cases)) %>%
@@ -397,7 +492,7 @@ cases_info = function(covid19){
     formatC(format="d", big.mark=",")
 }
 death_info = function(covid19){
-  subset4 <- covid19 %>%
+  covid19 %>%
     group_by(date) %>%
     summarise(deaths = sum(deaths, na.rm = TRUE), cases = sum(cases, na.rm = TRUE)) %>%
     mutate(new_cases = cases - lag(cases)) %>%
