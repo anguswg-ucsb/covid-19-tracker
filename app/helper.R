@@ -103,6 +103,53 @@ roll_mean_map <- function(today_2) {
               opacity = 1) %>%
     setView(lng = -98, lat= 38, zoom = 4)
 }
+basemap2 <- function(today, today_2) {
+    pal = colorNumeric("inferno", reverse= TRUE, domain = today$size, n = 50)
+    pal2 <- colorNumeric("inferno", reverse = TRUE, domain = today$cases, n = 50)
+    pal3 = colorNumeric("viridis", reverse= TRUE, domain = today_2$size3)
+    pal4 <- colorNumeric("viridis", reverse = TRUE, domain = today_2$rmean_percap)
+
+    leaflet() %>%
+        addProviderTiles(providers$CartoDB.Positron, group = "Topo") %>%
+        addScaleBar("bottomleft") %>%
+        addCircleMarkers(
+                  data = today,
+                  fillColor = ~pal(size),
+                  color = 'black',
+                  weight = 0.2,
+                  fillOpacity = 0.5,
+                  radius = ~size*2,
+                  layerId = ~fips,
+                  label   = ~name,
+                  group = 'Total cases') %>%
+        addLegend("bottomright",
+                  data = today,
+                  pal = pal2,
+                  values = ~cases,
+                  title = paste("COVID Cases<br>", max(today$date)),
+                  opacity = 1,
+                  group = "Total cases") %>%
+        addCircleMarkers(data = today_2,
+                  fillColor = ~pal3(size3),
+                  color = 'black',
+                  weight = 0.2,
+                  fillOpacity = 0.5,
+                  radius = ~size3*2,
+                  layerId = ~fips,
+                  label   = ~name,
+                  group = 'Cases/100k') %>%
+        addLegend("bottomright",
+                  data = today_2,
+                  pal = pal4,
+                  values = ~rmean_percap,
+                  title = paste("Cases/100k <br>", max(today_2$date)),
+                  group = "Cases/100k") %>%
+        hideGroup("Cases/100k") %>%
+        addLayersControl(overlayGroups = c("Total cases", "Cases/100k"),
+                         options = layersControlOptions(collapsed = FALSE)) %>%
+        setView(lng = -98, lat= 38, zoom = 4)
+}
+
 
 # zoom to selected county
 zoom_to_county = function(map, counties, FIP){
@@ -219,7 +266,7 @@ daily_county_cases = function(covid19, FIP){
     mutate(new_cases = cases - lag(cases)) %>%
     mutate(rolling_mean = rollmean(new_cases, 7, fill = NA, align = 'right')) %>%
     arrange(desc(date)) %>%
-    filter(new_cases >= 0) %>%
+    filter(new_cases >= 0, rolling_mean >= 0) %>%
     slice(n = 1:240)
   subset <- rename(subset, Date = date)
   subset$rolling_mean <- round(subset$rolling_mean, 1)
@@ -479,6 +526,7 @@ usa_total_deaths = function(covid19){
     layout(font = font) %>%
     config(displayModeBar = FALSE)
 }
+
 
 ### ------------ VALUE BOXES ------------ ###
 cases_info = function(covid19){

@@ -1,0 +1,31 @@
+.navbar-inverse {
+  background-color: #fd7e14;
+  border-color: #1967be;
+}
+
+.chart-title {
+    font-size: 50px;
+    color: #fd7e14;
+}
+
+
+body {
+  padding-top: 54px;
+}
+
+.section.sidebar {
+  top: 45px;
+  background-color: rgba(0, 140, 186, 0.1);
+}
+
+.value-box {
+  color: inherit;
+}
+
+.bg-primary {
+  background-color: rgba(0, 140, 186, 0.3);
+}
+
+.nav-tabs-custom > .nav-tabs > li.active {
+  background-color: rgba(0, 140, 186, 0.7);
+}

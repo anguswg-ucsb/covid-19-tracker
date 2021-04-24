@@ -4,9 +4,6 @@ runtime: shiny
 output: 
   flexdashboard::flex_dashboard:
     orientation: columns
-    overflow: auto
-    smooth_scroll: yes
-    social: menu
     source_code: embed
     theme: yeti
     vertical_layout: fill
@@ -22,7 +19,8 @@ library(leaflet)  # Maps
 library(dygraphs) # Charts
 library(DT)       # tables
 library(rvest)    # webscraping
-library(plotly)
+# library(USAboundaries)
+# library(USAboundariesData)
 library(highcharter)
 library(zoo)
 library(scales)
@@ -47,12 +45,14 @@ pop$fips <- as.numeric(pop$fips)
 
 ```{r context = "server"}
 # # Initalize data
-covid19 <- readRDS("covid_data.rds")
-# covid19  <-  read_covid19()
+# covid19 <- readRDS("covid_data.rds")
+covid19  <-  read_covid19()
 today    <-  today_centroids(counties, covid19)
-basemap  <-  basemap(today)
+# basemap  <-  basemap(today)
+
 today_2 <- today_centroids_2(counties, pop, covid19)
-basemap_2 <- roll_mean_map(today_2)
+basemap <- basemap2(today, today_2)
+# basemap_2 <- roll_mean_map(today_2)
 ```
 
 
@@ -60,47 +60,95 @@ basemap_2 <- roll_mean_map(today_2)
 FIP <- today$fips[which.max(today$cases)]
 v   <- reactiveValues(msg = "")
 
-output$covidMap     <- renderLeaflet({ basemap(today) })
-output$covidMap2     <- renderLeaflet({ roll_mean_map(today_2) })
-# output$covidGraph = renderDygraph({ make_graph(covid19, FIP) })
-# output$covidTable = renderFormattable({ make_table2(today, FIP) })
-# output$covidNewCases = renderPlotly({ daily_cases_graph(covid19, FIP) })
-# output$covidNewDeaths <- renderPlotly({ daily_deaths_graph(covid19, FIP) })
-# output$covidTotalCases = renderPlotly({ usa_total_cases(covid19) })
-# output$covidTotalDeaths = renderPlotly({ usa_total_deaths(covid19) })
+output$covidMap     <- renderLeaflet({ basemap2(today, today_2) })
+# county_lst <- USAboundaries::us_counties() %>% 
+#   st_drop_geometry()
 ```
 
 COVID-19 Tracker {data-icon="fa-briefcase-medical"}
 ====================================
-
-Column {data-width=350}
+Inputs {.sidebar data-width=150}
 -------------------------------------
-### CASES
+
+### Filters
+```{r}
+# state, county, usage and sector UI outputs
+uiOutput("countySelect")
+
+verbatimTextOutput("fipText")
+```
+
+###
+```{r}
+actionButton("submitButton", "Search", class = "btn-primary ")
+```
+
+Column {data-width=330}
+-------------------------------------
+### USA CASES
 ```{r}
 valueBoxOutput("totalCases")
 ```
 
-### DEATHS
+### USA DEATHS
 ```{r}
 valueBoxOutput("totalDeaths")
 ```
 
-### DEATH RATE
+### USA DEATH RATE
 ```{r}
 valueBoxOutput("deathRate")
 ```
 
-### Table
+### 
 ```{r}
 formattableOutput('covidTable')
 ```
 
-### Map2 
-```{r}
-leafletOutput("covidMap2")
-```
-
 ```{r context = "server"}
+countyInput <- observeEvent(input$submitButton, {
+  if(is.null(input$countySearch)) {
+    NULL
+  } else {
+      new_cases <- daily_county_cases(covid19, input$countySearch)
+      new_deaths <- daily_county_deaths(covid19, input$countySearch)
+      us_case <- total_us_cases(covid19)
+      us_deaths <- total_us_deaths(covid19)
+    
+      output$covidGraph = renderDygraph({ make_graph(covid19, input$countySearch) })
+      output$covidTable = renderFormattable({ make_table2(today, input$countySearch) })
+      output$covidNewCases = renderHighchart({ 
+          highchart() %>% 
+              hc_xAxis(type = "datetime", dateTimeLabelFormats = list(month = "%b", year = "%y")) %>%
+              hc_add_series(new_cases, name = "Daily cases", type = "column", hcaes(Date, new_cases)) %>%
+              hc_add_series(new_cases, name = "7 day rolling mean", type = "line", hcaes(Date, rolling_mean)) %>%
+              hc_plotOptions(column = list(pointWidth = 6,
+                                           dataLabels = list(enabled = FALSE),
+                                           enableMouseTracking = TRUE)) %>%
+              hc_colors(c("lightblue", "darkcyan"))
+      })
+      output$covidNewDeaths <- renderHighchart({ 
+          highchart() %>%
+              hc_xAxis(type = "datetime", dateTimeLabelFormats = list(month = "%b", year = "%y")) %>%
+              hc_add_series(new_deaths, name = "Daily deaths", type = "column", hcaes(Date, new_deaths)) %>%
+              hc_add_series(new_deaths, name = "7 day Rolling mean", type = "line", hcaes(Date, rolling_mean)) %>%
+              hc_plotOptions(column = list(pointWidth = 6,
+                                           dataLabels = list(enabled = FALSE),
+                                           enableMouseTracking = TRUE)) %>%
+              hc_colors(c("pink", "darkred"))
+      })
+          leafletProxy("covidMap") %>%
+              zoom_to_county(counties, input$countySearch)
+  }
+})
+
+# County input
+output$countySelect <- renderUI({
+   selectInput("countySearch", "FIPS codes:",
+               choices = as.list(sort(counties$fips)),
+               multiple= FALSE,
+               selectize = TRUE)
+})
 # Render total US cases
 output$totalCases <- renderValueBox({
     valueBox(
@@ -127,12 +175,12 @@ output$deathRate <- renderValueBox({
 Column {data-width=900}
 -------------------------------------
 
-### dygraph {data-height=200}
+### {data-height=200}
 ```{r}
 dygraphOutput("covidGraph")
 ```
 
-### Map1
+### 
 ```{r}
 leafletOutput("covidMap")
 ```
@@ -200,22 +248,22 @@ observeEvent(input$covidMap_marker_click, {
     output$covidNewCases = renderHighchart({ 
       highchart() %>%
           hc_xAxis(type = "datetime", dateTimeLabelFormats = list(month = "%b", year = "%y")) %>%
-          hc_add_series(new_cases, type = "column", hcaes(Date, new_cases)) %>%
-          hc_add_series(new_cases, type = "line", hcaes(Date, rolling_mean)) %>%
+          hc_add_series(new_cases, name = "Daily cases", type = "column", hcaes(Date, new_cases)) %>%
+          hc_add_series(new_cases, name = "7 day rolling mean", type = "line", hcaes(Date, rolling_mean)) %>%
           hc_plotOptions(column = list(pointWidth = 6,
                                        dataLabels = list(enabled = FALSE),
                                        enableMouseTracking = TRUE)) %>%
-          hc_colors(c("darkcyan", "darkred"))
+          hc_colors(c("lightblue", "darkcyan"))
       })
     output$covidNewDeaths <- renderHighchart({ 
       highchart() %>%
           hc_xAxis(type = "datetime", dateTimeLabelFormats = list(month = "%b", year = "%y")) %>%
           hc_add_series(new_deaths, name = "Daily deaths", type = "column", hcaes(Date, new_deaths)) %>%
-          hc_add_series(new_deaths, name = "Rolling mean", type = "line", hcaes(Date, rolling_mean)) %>%
+          hc_add_series(new_deaths, name = "7 day Rolling mean", type = "line", hcaes(Date, rolling_mean)) %>%
           hc_plotOptions(column = list(pointWidth = 6,
                                        dataLabels = list(enabled = FALSE),
                                        enableMouseTracking = TRUE)) %>%
-          hc_colors(c("grey", "black"))
+          hc_colors(c("pink", "darkred"))
       })
   })
 # Observes if MAP 2 is clicked, zooms to clicked county, renders graphs, tables, value boxes
